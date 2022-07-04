@@ -30,7 +30,7 @@ npm i koa
 ```
 
 ### 2 编写最基础的app
- 
+
 创建`src/main.js`
 
 ```
@@ -60,8 +60,10 @@ app.listen(3000,()=>{
 
 
 ```
-npm i nodemon
+npm i nodemon -D
 ```
+
+-D参数表示安装在‘Dev’开发环境下
 
 编写`package.json`脚本
 
@@ -119,4 +121,214 @@ app.use((ctx,next)=>{
 app.listen(APP_PORT,()=>{
     console.log(`server is running on http://localhost:${APP_PORT}`)
 })
+```
+
+## 四、添加路由
+
+### 1 安装 `koa-router`
+
+```
+npm i koa-router
+```
+
+开源文档 ：`https://github.com/ZijianHe/koa-router`
+
+步骤:
+导入包  var Router = require('koa-router');
+实例化对象  var router = new Router();
+编写路由   router.get
+注册中间件  app.use(router.routes())
+
+```
+var Koa = require('koa');
+var Router = require('koa-router');
+
+var app = new Koa();
+var router = new Router();
+
+router.get('/', (ctx, next) => {
+  // ctx.router available
+});
+
+app
+  .use(router.routes())
+  .use(router.allowedMethods());
+```
+
+### 2创建`src/router`目录, 编写`user.route.js`
+
+```
+const Router = require('koa-router')
+
+const router = new Router({ prefix: '/users' })
+
+// GET /users/
+router.get('/', (ctx, next) => {
+  ctx.body = 'hello users'
+})
+
+module.exports = router
+```
+
+### 3 改写 main.js
+
+```
+const Koa = require('koa')
+
+const { APP_PORT } = require('./config/config.default')
+
+const userRouter = require('./router/user.route')
+
+const app = new Koa()
+
+app.use(userRouter.routes())
+
+app.listen(APP_PORT, () => {
+  console.log(`server is running on http://localhost:${APP_PORT}`)
+})
+```
+
+## 五、目录结构优化
+
+### 1 将 http 服务和 app 业务拆分
+
+创建`src/app/index.js`
+
+```
+const Koa = require('koa')
+
+const userRouter = require('../router/user.route')
+
+const app = new Koa()
+
+app.use(userRouter.routes())
+
+module.exports = app
+```
+
+改写`main.js`
+
+```
+const { APP_PORT } = require('./config/config.default')
+
+const app = require('./app')
+
+app.listen(APP_PORT, () => {
+  console.log(`server is running on http://localhost:${APP_PORT}`)
+})
+```
+
+### 2 将路由和控制器拆分
+
+路由: 解析 URL, 分布给控制器对应的方法
+
+控制器: 处理不同的业务
+
+改写`user.route.js`
+
+```
+const Router = require('koa-router')
+
+const { register, login } = require('../controller/user.controller')
+
+const router = new Router({ prefix: '/users' })
+
+// 注册接口
+router.post('/register', register)
+
+// 登录接口
+router.post('/login', login)
+
+module.exports = router
+```
+
+创建`controller/user.controller.js`
+
+```
+class UserController {
+  async register(ctx, next) {
+    ctx.body = '用户注册成功'
+  }
+
+  async login(ctx, next) {
+    ctx.body = '登录成功'
+  }
+}
+
+module.exports = new UserController()
+```
+
+## 六、解析body
+
+npm文档链接`https://www.npmjs.com/package/koa-body`
+
+### 1.安装koa-body
+
+```
+npm i koa-body
+```
+
+### 2.注册中间件
+
+在其他中间件之前写入
+
+改写`app/index.js`
+
+```
+const Koa = require('koa')
+const KoaBody = require('koa-body')
+
+const userRouter = require('../router/user.route')
+
+const app = new Koa()
+// KoaBody 注册在其他中间件之前
+app.use(KoaBody())
+app.use(userRouter.routes())
+
+module.exports = app 
+```
+
+### 3 解析请求数据
+
+改写`user.controller.js`文件
+
+```
+const { createUser } = require('../service/user.service')
+
+class UserController {
+  async register(ctx, next) {
+    // 1. 获取数据
+    // console.log(ctx.request.body)
+    // 使用KOA-body后请求发送的数据在request.body中
+    const { user_name, password } = ctx.request.body
+    // 2. 操作数据库
+    const res = await createUser(user_name, password)
+    // console.log(res)
+    // 3. 返回结果
+    ctx.body = ctx.request.body
+  }
+
+  async login(ctx, next) {
+    ctx.body = '登录成功'
+  }
+}
+
+module.exports = new UserController()
+```
+
+### 4 拆分 service 层
+
+service 层主要是做数据库处理
+
+创建`src/service/user.service.js`
+
+```
+class UserService {
+  async createUser(user_name, password) {
+    // todo: 写入数据库
+    return '写入数据库成功'
+  }
+}
+
+module.exports = new UserService()
 ```
